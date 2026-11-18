@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.wrangler
+.dev.vars
+.DS_Store
+*.log
+
+# 本地 IDE / 技能缓存，不进仓库
+.cursor/
+.impeccable/
+
+# 由 Excel / 飞书生成，含公司联系方式，不进版本库
+# 同事需自行 npm run data，或私下同步这三份文件
+public/data/workbench.json
+public/data/contact-cc.json
+public/data/feishu-company-links.json

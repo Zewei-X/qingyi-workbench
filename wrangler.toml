@@ -1,0 +1,9 @@
+name = "vc-workbench"
+compatibility_date = "2025-11-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vc-workbench"
+database_id = "5abcfce4-d252-4907-becc-44ec64cb87ac"
+migrations_dir = "migrations"
