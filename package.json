@@ -10,6 +10,7 @@
     "data": "python3 scripts/build-data.py",
     "contact-cc": "python3 scripts/import-contact-cc.py",
     "feishu-links": "python3 scripts/import-feishu-links.py",
+    "investors": "python3 scripts/import-investor-orgs.py",
     "cf:login": "wrangler login",
     "cf:db": "wrangler d1 create vc-workbench",
     "cf:migrate:local": "wrangler d1 migrations apply vc-workbench --local",

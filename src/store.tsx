@@ -101,10 +101,14 @@ function cloneTracks(tracks: SectorTrack[]): SectorTrack[] {
 }
 
 function normalizeContact(c: Contact): Contact {
-  return {
-    ...c,
-    kind: c.kind || (c.source === 'FA 通讯录' || c.role === 'FA' ? 'fa' : 'founder'),
-  }
+  const kind =
+    c.kind ||
+    (c.source === '投资机构' || c.role === '投资机构联系人'
+      ? 'investor'
+      : c.source === 'FA 通讯录' || c.role === 'FA'
+        ? 'fa'
+        : 'founder')
+  return { ...c, kind }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {

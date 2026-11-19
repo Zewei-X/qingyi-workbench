@@ -727,6 +727,59 @@ table.data tr.row-selected td {
   line-height: 1.45;
   color: var(--muted);
 }
+.investors-page .split-list {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 22px;
+}
+.investors-page .side-list button {
+  padding: 16px 18px;
+}
+.investors-page .panel-h {
+  padding: 18px 22px 14px;
+}
+.investors-page .fa-org-profile {
+  margin: 4px 22px 8px;
+  padding: 16px 18px 18px;
+}
+.investors-page .fa-org-summary {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.investors-page .table-wrap {
+  padding: 0 10px 12px;
+}
+.investors-page .data th,
+.investors-page .data td {
+  padding: 12px 14px;
+}
+.investor-section {
+  margin: 8px 22px 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-soft, #e6ebe8);
+}
+.investor-subhead {
+  padding: 0 0 12px !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+}
+.investor-subhead h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.investor-deal-toolbar {
+  margin-bottom: 12px;
+}
+.investor-deal-table {
+  max-height: 56vh;
+  overflow: auto;
+  padding: 0 !important;
+}
+.tiny {
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 2px;
+}
 .fa-org-cases li::marker {
   color: color-mix(in srgb, var(--accent) 70%, var(--muted));
 }

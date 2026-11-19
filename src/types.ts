@@ -77,7 +77,7 @@ export interface Note {
   sample?: boolean
 }
 
-export type ContactKind = 'fa' | 'founder'
+export type ContactKind = 'fa' | 'founder' | 'investor'
 
 export interface Contact {
   id: string
@@ -86,7 +86,7 @@ export interface Contact {
   role: string
   others: Person[]
   companyId: string | null
-  /** FA 所属机构，或创始人对应公司 */
+  /** FA/投资机构所属机构名，或创始人对应公司 */
   companyName: string
   phones: string[]
   emails: string[]

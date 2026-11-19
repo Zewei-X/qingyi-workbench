@@ -11,11 +11,13 @@ import Research from './pages/Research'
 import Expos from './pages/Expos'
 import Notes from './pages/Notes'
 import Contacts from './pages/Contacts'
+import Investors from './pages/Investors'
 
 const links = [
   { to: '/', label: '今日', end: true },
   { to: '/projects', label: '项目库' },
   { to: '/cc', label: 'CC 跟进' },
+  { to: '/investors', label: '投资机构' },
   { to: '/research', label: '赛道研究' },
   { to: '/expos', label: '展会日历' },
   { to: '/notes', label: '飞书纪要' },
@@ -137,6 +139,7 @@ export default function App() {
           <Route path="/research" element={<Research />} />
           <Route path="/expos" element={<Expos />} />
           <Route path="/notes" element={<Notes />} />
+          <Route path="/investors" element={<Investors />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
