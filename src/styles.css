@@ -775,6 +775,13 @@ table.data tr.row-selected td {
   overflow: auto;
   padding: 0 !important;
 }
+.investors-mobile-picker {
+  display: none;
+}
+.investors-deal-cards,
+.investors-contact-cards {
+  display: none;
+}
 .tiny {
   font-size: 11px;
   line-height: 1.35;
@@ -1695,6 +1702,79 @@ table.data tbody tr.is-active td {
   .side-list { max-height: 280px; }
   .expo-detail { position: static; max-height: none; }
   .cc-tracks { position: static; }
+
+  /* 投资机构：中等宽度起就改成选择器 + 卡片，避免侧栏+宽表难用 */
+  .investors-page .page-head p { display: none; }
+  .investors-mobile-picker { display: block; margin-bottom: 12px; }
+  .investors-mobile-picker-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .investors-mobile-picker .field { min-height: 44px; font-size: 15px; }
+  .investors-page .investors-desktop-only { display: none !important; }
+  .investors-page .investors-layout { display: block; min-height: 0; }
+  .investors-page .investors-detail {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .investors-page .panel-h {
+    padding: 4px 0 12px;
+    border-bottom: 0;
+    background: transparent;
+  }
+  .investors-page .fa-org-profile { margin: 0 0 12px; padding: 14px; }
+  .investors-page .investor-section { margin: 0 0 16px; padding-top: 14px; }
+  .investors-deal-cards,
+  .investors-contact-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .investor-deal-card,
+  .investor-contact-card {
+    padding: 12px 14px;
+    border: 1px solid var(--line-soft);
+    border-radius: 12px;
+    background: var(--paper);
+  }
+  .investor-deal-card-title,
+  .investor-contact-card-top strong {
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .investor-contact-card-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .investor-contact-card-top span {
+    color: var(--muted);
+    font-size: 12px;
+    flex: 0 0 auto;
+  }
+  .investor-deal-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .investor-deal-card-industry {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .investor-contact-card .page-actions { margin-top: 10px; }
 }
 
 @media (max-width: 1100px) and (min-width: 821px) {
@@ -1891,6 +1971,14 @@ table.data tbody tr.is-active td {
 
   .side-list {
     max-height: 42vh;
+  }
+
+  .investors-page .panel-h h2 {
+    font-size: 1.35rem;
+  }
+  .investors-page .fa-org-summary {
+    font-size: 13.5px;
+    line-height: 1.6;
   }
 
   .cc-desktop-only { display: none !important; }

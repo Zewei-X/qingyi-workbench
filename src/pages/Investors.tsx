@@ -185,13 +185,33 @@ export default function Investors() {
         }
       />
 
-      <div className="toolbar">
+      <div className="toolbar investors-desktop-only">
         <input
           className="field grow"
           placeholder="搜索机构、联系人…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+      </div>
+
+      <div className="investors-mobile-picker">
+        <label className="investors-mobile-picker-label">
+          选择机构
+          <select
+            className="field"
+            value={activeOrg.id}
+            onChange={(e) => {
+              setOrgId(e.target.value)
+              setDealQ('')
+            }}
+          >
+            {(data.orgs || []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}（{o.deals.length}）
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {editing ? (
@@ -263,8 +283,8 @@ export default function Investors() {
         </section>
       ) : null}
 
-      <div className="split-list fa-org-layout">
-        <div className="side-list">
+      <div className="split-list fa-org-layout investors-layout">
+        <div className="side-list investors-desktop-only">
           {orgRows.map((o) => (
             <button
               key={o.id}
@@ -283,7 +303,7 @@ export default function Investors() {
           {!orgRows.length ? <Empty text="没有匹配的机构。" /> : null}
         </div>
 
-        <div className="panel">
+        <div className="panel investors-detail">
           <div className="panel-h">
             <h2>{activeOrg.name}</h2>
             <span>被投 {num(activeOrg.deals.length)} 家</span>
@@ -309,41 +329,64 @@ export default function Investors() {
               <span>{num(people.length)} 人</span>
             </div>
             {people.length ? (
-              <div className="table-wrap">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>姓名</th>
-                      <th>微信 / 电话</th>
-                      <th>内部关系</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {people.map((c) => (
-                      <tr key={c.id}>
-                        <td>
-                          <div className="name-cell">{c.name}</div>
-                        </td>
-                        <td className="clamp">
-                          {[c.wechat, ...c.phones].filter(Boolean).join(' / ') || '—'}
-                        </td>
-                        <td>{c.via || '—'}</td>
-                        <td>
-                          <div className="page-actions">
-                            <button className="btn ghost" onClick={() => setEditing(c)}>
-                              编辑
-                            </button>
-                            <button className="btn ghost" onClick={() => deleteContact(c.id)}>
-                              删除
-                            </button>
-                          </div>
-                        </td>
+              <>
+                <div className="table-wrap investors-desktop-only">
+                  <table className="data">
+                    <thead>
+                      <tr>
+                        <th>姓名</th>
+                        <th>微信 / 电话</th>
+                        <th>内部关系</th>
+                        <th></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {people.map((c) => (
+                        <tr key={c.id}>
+                          <td>
+                            <div className="name-cell">{c.name}</div>
+                          </td>
+                          <td className="clamp">
+                            {[c.wechat, ...c.phones].filter(Boolean).join(' / ') || '—'}
+                          </td>
+                          <td>{c.via || '—'}</td>
+                          <td>
+                            <div className="page-actions">
+                              <button className="btn ghost" onClick={() => setEditing(c)}>
+                                编辑
+                              </button>
+                              <button className="btn ghost" onClick={() => deleteContact(c.id)}>
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="investors-contact-cards">
+                  {people.map((c) => (
+                    <article key={c.id} className="investor-contact-card">
+                      <div className="investor-contact-card-top">
+                        <strong>{c.name}</strong>
+                        <span>{c.via || '无内部关系'}</span>
+                      </div>
+                      <div className="muted">
+                        {[c.wechat, ...c.phones].filter(Boolean).join(' / ') || '暂无联系方式'}
+                      </div>
+                      <div className="page-actions">
+                        <button className="btn ghost" onClick={() => setEditing(c)}>
+                          编辑
+                        </button>
+                        <button className="btn ghost" onClick={() => deleteContact(c.id)}>
+                          删除
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
             ) : (
               <Empty text="暂无联系人，可点右上角添加。" />
             )}
@@ -359,12 +402,13 @@ export default function Investors() {
             <div className="toolbar investor-deal-toolbar">
               <input
                 className="field grow"
-                placeholder="在本机构内搜索公司、地区、行业…"
+                placeholder="搜索公司、地区、行业…"
                 value={dealQ}
                 onChange={(e) => setDealQ(e.target.value)}
               />
             </div>
-            <div className="table-wrap investor-deal-table">
+
+            <div className="table-wrap investor-deal-table investors-desktop-only">
               <table className="data">
                 <colgroup>
                   <col style={{ width: '34%' }} />
@@ -400,6 +444,23 @@ export default function Investors() {
                   ))}
                 </tbody>
               </table>
+              {!deals.length ? <Empty text="没有匹配的被投公司。" /> : null}
+            </div>
+
+            <div className="investors-deal-cards">
+              {deals.map((d) => (
+                <article key={d.formal} className="investor-deal-card">
+                  <div className="investor-deal-card-title">{d.short || d.formal}</div>
+                  {d.short ? <div className="muted tiny">{d.formal}</div> : null}
+                  <div className="investor-deal-card-meta">
+                    <span>{d.date || '日期未知'}</span>
+                    <span>{d.region || '地区未知'}</span>
+                    <span>{d.pct ? `${d.pct}%` : '持股未知'}</span>
+                    <span>{d.status || '状态未知'}</span>
+                  </div>
+                  <div className="investor-deal-card-industry">{d.industry || '行业未知'}</div>
+                </article>
+              ))}
               {!deals.length ? <Empty text="没有匹配的被投公司。" /> : null}
             </div>
           </div>
