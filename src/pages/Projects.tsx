@@ -8,13 +8,20 @@ import type { Verdict } from '../types'
 const PAGE = 40
 
 export default function Projects() {
-  const { companies } = useStore()
+  const { companies, catalogSyncedAt, catalogSyncing, syncCatalog } = useStore()
   const nav = useNavigate()
   const [q, setQ] = useState('')
   const [group, setGroup] = useState('全部')
   const [verdict, setVerdict] = useState<'全部' | Verdict>('全部')
   const [onlyCC, setOnlyCC] = useState(false)
   const [page, setPage] = useState(1)
+  const [syncMsg, setSyncMsg] = useState('')
+
+  async function onSync() {
+    setSyncMsg('')
+    const r = await syncCatalog()
+    setSyncMsg(r.ok ? `已同步 ${r.companies ?? companies.length} 家` : r.error || '同步失败')
+  }
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
@@ -43,8 +50,20 @@ export default function Projects() {
     <div>
       <PageHead
         title="项目库"
-        desc={`共 ${num(companies.length)} 家公司。按 Excel「总表」沉淀融资事件，点进公司看完整档案与判断。`}
+        desc={`共 ${num(companies.length)} 家公司。目录来自飞书多维表总表/CC 表${
+          catalogSyncedAt ? `（同步于 ${shortDate(catalogSyncedAt.slice(0, 10))}）` : '（本地缓存）'
+        }；网站上的 CC 跟进以本站为准。`}
+        actions={
+          <button type="button" className="btn primary" disabled={catalogSyncing} onClick={() => void onSync()}>
+            {catalogSyncing ? '同步中…' : '立即同步'}
+          </button>
+        }
       />
+      {syncMsg ? (
+        <p className="muted" style={{ margin: '-6px 0 12px', fontSize: 12 }}>
+          {syncMsg}
+        </p>
+      ) : null}
 
       <div className="toolbar">
         <input

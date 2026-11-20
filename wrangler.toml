@@ -2,6 +2,12 @@ name = "vc-workbench"
 compatibility_date = "2025-11-01"
 pages_build_output_dir = "dist"
 
+# Pages 密钥（Dashboard → Settings → Environment variables，勿写入本文件）：
+#   FEISHU_APP_ID
+#   FEISHU_APP_SECRET
+#   FEISHU_BITABLE_APP_TOKEN  （默认 WmJebv7lna42Tgs3aPqcJWqMn4e）
+#   SYNC_SECRET               （GitHub Action 定时同步用）
+
 [[d1_databases]]
 binding = "DB"
 database_name = "vc-workbench"

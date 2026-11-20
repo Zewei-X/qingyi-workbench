@@ -64,7 +64,18 @@ function blankDraft(track: string, focusBoard: boolean): Draft {
 }
 
 export default function CC() {
-  const { companies, owners, addTouch, removeFromCC, addCCCompany, addCCTrack, ccTracks } = useStore()
+  const {
+    companies,
+    owners,
+    addTouch,
+    removeFromCC,
+    addCCCompany,
+    addCCTrack,
+    ccTracks,
+    catalogSyncedAt,
+    catalogSyncing,
+    syncCatalog,
+  } = useStore()
   const nav = useNavigate()
   const [track, setTrack] = useState<string>(CC_FOCUS)
   const [bucket, setBucket] = useState<CCBucket>('all')
@@ -279,9 +290,19 @@ export default function CC() {
     <div>
       <PageHead
         title="CC 跟进"
-        desc="总表看全部进度；重点跟进汇总各赛道优先公司；左侧进赛道排 CC。还没发申请的在「需建联」，发了但没建联的仍在未触达库。"
+        desc={`总表看全部进度；重点跟进汇总各赛道优先公司。飞书同步只补新公司与融资；本站已改过的 CC 不会被覆盖。${
+          catalogSyncedAt ? ` 目录同步于 ${shortDate(catalogSyncedAt.slice(0, 10))}。` : ''
+        }`}
         actions={
           <>
+            <button
+              type="button"
+              className="btn"
+              disabled={catalogSyncing}
+              onClick={() => void syncCatalog()}
+            >
+              {catalogSyncing ? '同步中…' : '立即同步'}
+            </button>
             <button type="button" className="btn primary" onClick={openAdd}>
               添加
             </button>

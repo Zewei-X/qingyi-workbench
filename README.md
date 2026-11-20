@@ -4,7 +4,8 @@
 
 - 线上：https://vc-workbench.pages.dev/
 - 业务跟进数据存在 Cloudflare D1，同事打开同一站点可见
-- 静态项目库从 Excel 生成，**不进 Git**（含联系方式）
+- 项目库 / CC 种子目录优先来自飞书多维表同步（总表 + CC 表）；本站改过的 CC **不会被飞书覆盖**
+- 本地仍可用 Excel 生成 `workbench.json` 作回退，**不进 Git**（含联系方式）
 
 ## 同事怎么加入（GitHub）
 
@@ -66,11 +67,22 @@ npm run cf:deploy
 ## 本地命令
 
 ```bash
-npm run data       # Excel → public/data/workbench.json
+npm run data       # Excel → public/data/workbench.json（无飞书 catalog 时回退）
+npm run feishu-links  # 飞书简介链接 → feishu-company-links.json
 npm run dev        # 本地开发（无 D1 时用 localStorage）
 npm run cf:dev     # 本地 Pages + D1
+npm run cf:migrate # 远端 D1 迁移（含 catalog_state）
 npm run cf:deploy  # 构建并发布到 Cloudflare Pages
 ```
+
+## 飞书多维表同步
+
+1. Cloudflare Pages 配置环境变量：`FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`FEISHU_BITABLE_APP_TOKEN`、`SYNC_SECRET`
+2. 执行 `npm run cf:migrate` 创建 `catalog_state` 表
+3. 站点「项目库 / CC」点 **立即同步**，或等 GitHub Action 每 15 分钟跑一次
+4. GitHub 仓库 Secrets：`SYNC_SECRET`（与 CF 相同）、可选 `SYNC_FEISHU_URL`（默认 `https://vc-workbench.pages.dev/api/sync-feishu`）
+
+同步写入 D1 catalog；网站 overlay（判断、CC 状态、触达等）仍走 `/api/state`，CC 冲突以网站为准。
 
 ## 注意
 

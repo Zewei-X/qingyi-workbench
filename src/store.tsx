@@ -49,12 +49,16 @@ interface RawFile {
   sourceFile: string
   owners: string[]
   companies: Company[]
+  syncedAt?: string
 }
 
 interface Store {
   ready: boolean
   error: string
   generatedAt: string
+  /** 飞书目录最近同步时间（ISO）；无则表示仍用本地 workbench.json */
+  catalogSyncedAt: string
+  catalogSyncing: boolean
   owners: string[]
   companies: Company[]
   logs: TouchLog[]
@@ -67,6 +71,8 @@ interface Store {
   ccTracks: string[]
   todos: TodoItem[]
   companyMap: Map<string, Company>
+  /** 从飞书多维表拉取总表/CC 并刷新项目库（CC 以网站 overlay 为准） */
+  syncCatalog: () => Promise<{ ok: boolean; error?: string; companies?: number }>
   updateCC: (id: string, patch: Partial<NonNullable<Company['cc']>>) => void
   setVerdict: (id: string, verdict: Verdict, judgment?: string) => void
   updateCompany: (id: string, patch: Partial<Company>) => void
@@ -125,12 +131,98 @@ function normalizeContact(c: Contact): Contact {
   return { ...c, kind }
 }
 
+async function fetchCatalogSeed(): Promise<RawFile> {
+  try {
+    const res = await fetch('/api/catalog', { cache: 'no-store' })
+    if (res.status === 204) throw new Error('empty catalog')
+    if (!res.ok) throw new Error(`catalog ${res.status}`)
+    const data = (await res.json()) as RawFile
+    if (!Array.isArray(data.companies) || !data.companies.length) throw new Error('empty companies')
+    return data
+  } catch {
+    return fetchJsonCached<RawFile>('/data/workbench.json')
+  }
+}
+
+function mergeSeedCompanies(
+  raw: RawFile,
+  persist: Persist,
+  feishuByName: Map<string, string>,
+  contactExtra: Company[],
+): Company[] {
+  const dismissed = new Set(persist.dismissedCcIds || [])
+  const patchCompany = (c: Company): Company => {
+    const patch = persist.companies?.[c.id]
+    let base: Company = patch
+      ? {
+          ...c,
+          ...patch,
+          // CC：网站 overlay 整包优先；无 overlay 才用飞书种子
+          cc: dismissed.has(c.id)
+            ? null
+            : patch.cc
+              ? { ...patch.cc }
+              : c.cc,
+          events: patch.events?.length ? patch.events : c.events,
+        }
+      : dismissed.has(c.id)
+        ? { ...c, cc: null }
+        : c
+    if (base.cc && !base.cc.appliedAt && (base.cc.stage === 'reached' || /申请/.test(base.cc.status || ''))) {
+      base = { ...base, cc: { ...base.cc, appliedAt: base.cc.lastTouch } }
+    }
+    if (!base.feishuUrl) {
+      const url = feishuByName.get(base.name)
+      if (url) base = { ...base, feishuUrl: url }
+    }
+    return base
+  }
+  const merged = raw.companies.map(patchCompany)
+  const seen = new Set(merged.map((c) => c.id))
+  for (const c of contactExtra) {
+    if (seen.has(c.id) || dismissed.has(c.id)) continue
+    merged.push(patchCompany(c))
+    seen.add(c.id)
+  }
+  for (const [id, patch] of Object.entries(persist.companies || {})) {
+    if (seen.has(id) || dismissed.has(id)) continue
+    if (!patch.custom || !patch.name) continue
+    merged.push(
+      patchCompany({
+        id,
+        name: patch.name,
+        sector: patch.sector || '',
+        sectorIsClass: false,
+        group: patch.group || '未归类',
+        source: patch.source || '',
+        sourceManual: patch.sourceManual,
+        founder: patch.founder || '',
+        relation: patch.relation || '',
+        verdict: patch.verdict || 'none',
+        judgment: patch.judgment || '',
+        lastDate: patch.lastDate || null,
+        events: patch.events || [],
+        cc: patch.cc || null,
+        feishuUrl: patch.feishuUrl,
+        sectorDetailUrl: patch.sectorDetailUrl,
+        custom: true,
+      }),
+    )
+    seen.add(id)
+  }
+  return merged
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
   const [generatedAt, setGeneratedAt] = useState('')
+  const [catalogSyncedAt, setCatalogSyncedAt] = useState('')
+  const [catalogSyncing, setCatalogSyncing] = useState(false)
   const [owners, setOwners] = useState<string[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const feishuLinksRef = useRef<Map<string, string>>(new Map())
+  const contactExtraRef = useRef<Company[]>([])
   const [logs, setLogs] = useState<TouchLog[]>([])
   const [notes, setNotes] = useState<Note[]>(SAMPLE_NOTES)
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -187,7 +279,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const local = loadLocalPersist()
         // 静态库 + D1 并行；静态走 Cache API，二次打开可秒开
         const [raw, contactFile, feishuFile, remote] = await Promise.all([
-          fetchJsonCached<RawFile>('/data/workbench.json'),
+          fetchCatalogSeed(),
           fetchJsonOptional<{ companies?: Company[] }>('/data/contact-cc.json'),
           fetchJsonOptional<{ links?: { name: string; feishuUrl: string }[] }>(
             '/data/feishu-company-links.json',
@@ -201,6 +293,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (const row of feishuFile?.links || []) {
           if (row.name && row.feishuUrl) feishuByName.set(row.name, row.feishuUrl)
         }
+        contactExtraRef.current = contactExtra
+        feishuLinksRef.current = feishuByName
 
         let persist = local
         let version = 0
@@ -234,63 +328,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           persist = slimPersistData(local)
         }
 
-        const dismissed = new Set(persist.dismissedCcIds || [])
-        setDismissedCcIds([...dismissed])
-        const patchCompany = (c: Company): Company => {
-          const patch = persist.companies?.[c.id]
-          let base = patch
-            ? {
-                ...c,
-                ...patch,
-                cc: c.cc || patch.cc ? ({ ...(c.cc || ({} as Company['cc'])), ...patch.cc } as Company['cc']) : null,
-              }
-            : c
-          if (dismissed.has(c.id)) {
-            base = { ...base, cc: null }
-          } else if (base.cc && !base.cc.appliedAt && (base.cc.stage === 'reached' || /申请/.test(base.cc.status || ''))) {
-            base = { ...base, cc: { ...base.cc, appliedAt: base.cc.lastTouch } }
-          }
-          if (!base.feishuUrl) {
-            const url = feishuByName.get(base.name)
-            if (url) base = { ...base, feishuUrl: url }
-          }
-          return base
-        }
-        const merged = raw.companies.map(patchCompany)
-        const seen = new Set(merged.map((c) => c.id))
-        for (const c of contactExtra) {
-          if (seen.has(c.id) || dismissed.has(c.id)) continue
-          merged.push(patchCompany(c))
-          seen.add(c.id)
-        }
-        for (const [id, patch] of Object.entries(persist.companies || {})) {
-          if (seen.has(id) || dismissed.has(id)) continue
-          if (!patch.custom || !patch.name) continue
-          merged.push(
-            patchCompany({
-              id,
-              name: patch.name,
-              sector: patch.sector || '',
-              sectorIsClass: false,
-              group: patch.group || '未归类',
-              source: patch.source || '',
-              sourceManual: patch.sourceManual,
-              founder: patch.founder || '',
-              relation: patch.relation || '',
-              verdict: patch.verdict || 'none',
-              judgment: patch.judgment || '',
-              lastDate: patch.lastDate || null,
-              events: patch.events || [],
-              cc: patch.cc || null,
-              feishuUrl: patch.feishuUrl,
-              sectorDetailUrl: patch.sectorDetailUrl,
-              custom: true,
-            }),
-          )
-          seen.add(id)
-        }
+        setDismissedCcIds([...(persist.dismissedCcIds || [])])
+        const merged = mergeSeedCompanies(raw, persist, feishuByName, contactExtra)
         setGeneratedAt(raw.generatedAt)
-        setOwners(raw.owners)
+        setCatalogSyncedAt(raw.syncedAt || '')
+        setOwners(raw.owners || [])
         setCompanies(merged)
         setLogs(persist.logs || [])
         setNotes(persist.notes?.length ? persist.notes : SAMPLE_NOTES)
@@ -734,10 +776,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTodos((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
+  const syncCatalog = useCallback(async () => {
+    setCatalogSyncing(true)
+    try {
+      const syncRes = await fetch('/api/sync-feishu', { method: 'POST', cache: 'no-store' })
+      const syncBody = (await syncRes.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        companies?: number
+      }
+      if (!syncRes.ok || syncBody.error) {
+        return { ok: false, error: syncBody.error || `同步失败 (${syncRes.status})` }
+      }
+      const catRes = await fetch('/api/catalog', { cache: 'no-store' })
+      if (!catRes.ok) {
+        return { ok: false, error: `同步成功但读取目录失败 (${catRes.status})` }
+      }
+      const raw = (await catRes.json()) as RawFile
+      if (!Array.isArray(raw.companies)) {
+        return { ok: false, error: '目录格式无效' }
+      }
+      const persist = payloadRef.current || slimPersistData(loadLocalPersist())
+      setDismissedCcIds([...(persist.dismissedCcIds || [])])
+      const merged = mergeSeedCompanies(
+        raw,
+        persist,
+        feishuLinksRef.current,
+        contactExtraRef.current,
+      )
+      setGeneratedAt(raw.generatedAt || new Date().toISOString())
+      setCatalogSyncedAt(raw.syncedAt || (syncBody.ok ? new Date().toISOString() : ''))
+      setOwners(raw.owners || [])
+      setCompanies(merged)
+      return { ok: true, companies: syncBody.companies ?? raw.companies.length }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : '同步失败' }
+    } finally {
+      setCatalogSyncing(false)
+    }
+  }, [])
+
   const value: Store = {
     ready,
     error,
     generatedAt,
+    catalogSyncedAt,
+    catalogSyncing,
     owners,
     companies,
     logs,
@@ -749,6 +833,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ccTracks,
     todos,
     companyMap,
+    syncCatalog,
     updateCC,
     setVerdict,
     updateCompany,
