@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useMemo, useState } from 'react'
-import { useStore, EXPOS } from '../store'
+import { useStore } from '../store'
 import { PageHead, Panel, Empty, StageBadge } from '../ui'
 import {
   FOLLOW_UP_DAYS,
@@ -43,7 +43,7 @@ function expoRange(
 }
 
 export default function Today() {
-  const { companies, expoState, todos, addTodo, toggleTodo, updateTodo, deleteTodo } = useStore()
+  const { companies, expoState, expos, todos, addTodo, toggleTodo, updateTodo, deleteTodo } = useStore()
   const today = todayISO()
   const weekEnd = addDays(today, 6)
   const [draft, setDraft] = useState('')
@@ -70,7 +70,7 @@ export default function Today() {
   }, [companies, today])
 
   const upcoming = useMemo(() => {
-    const ranked = EXPOS.map((e) => {
+    const ranked = expos.map((e) => {
       const hit = months.find((m) => m.month === e.month) || months[0]
       return { ...e, year: hit.year }
     })
@@ -97,7 +97,7 @@ export default function Today() {
       })
     }
     return hits.sort((a, b) => a.start.localeCompare(b.start) || a.expo.name.localeCompare(b.expo.name, 'zh'))
-  }, [months, expoState, today, weekEnd, city])
+  }, [months, expos, expoState, today, weekEnd, city])
 
   const openTodos = todos.filter((t) => !t.done)
   const doneTodos = todos.filter((t) => t.done)

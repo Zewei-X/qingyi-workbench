@@ -5,6 +5,8 @@ import { PageHead, StageBadge, VerdictBadge, Empty } from '../ui'
 import { CC_TRACKS, GROUPS, STAGES, VERDICTS, companyTrack, shortDate, todayISO } from '../lib'
 import type { Stage, Verdict } from '../types'
 
+const SOURCE_PRESETS = ['融资变更', 'PR爬取', '企名片', '外滩大会', 'CC表手动项目', 'CC表', '手动']
+
 export default function Company() {
   const { id = '' } = useParams()
   const { companyMap, notes, contacts, owners, updateCC, setVerdict, updateCompany, ccTracks } =
@@ -42,7 +44,14 @@ export default function Company() {
     <div>
       <PageHead
         title={company.name}
-        desc={[company.group, company.sector, company.founder].filter(Boolean).join(' · ')}
+        desc={[
+          company.source || company.events[0]?.source || company.cc?.source,
+          company.group,
+          company.sector,
+          company.founder,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
         actions={
           <>
             <Link className="btn" to="/projects">
@@ -95,6 +104,54 @@ export default function Company() {
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+            <div className="form-row one">
+              <label>
+                来源
+                <div className="source-edit">
+                  <input
+                    className="field grow"
+                    list={`source-presets-${company.id}`}
+                    placeholder="空着可手填，如：融资变更 / PR爬取 / 企名片"
+                    value={company.source || ''}
+                    onChange={(e) => {
+                      const source = e.target.value
+                      updateCompany(company.id, {
+                        source,
+                        sourceManual: true,
+                        ...(company.cc && !company.cc.source
+                          ? { cc: { ...company.cc, source } }
+                          : {}),
+                      })
+                    }}
+                  />
+                  <datalist id={`source-presets-${company.id}`}>
+                    {SOURCE_PRESETS.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
+                  <div className="chips">
+                    {SOURCE_PRESETS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`chip ${company.source === s ? 'on' : ''}`}
+                        onClick={() =>
+                          updateCompany(company.id, {
+                            source: s,
+                            sourceManual: true,
+                            ...(company.cc && !company.cc.source
+                              ? { cc: { ...company.cc, source: s } }
+                              : {}),
+                          })
+                        }
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </label>
             </div>
             <div className="form-row">

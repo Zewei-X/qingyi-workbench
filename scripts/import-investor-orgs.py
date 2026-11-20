@@ -11,8 +11,121 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+from datetime import date, timedelta
+
+from investor_teams import TEAM_SOURCES, TEAMS
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public" / "data" / "investor-orgs.json"
+
+# 只保留近两年有明确投资日期的记录
+DEAL_CUTOFF = (date.today() - timedelta(days=730)).isoformat()
+
+# 大类顺序即优先级（先匹配先归类）
+CATEGORIES = [
+    "AI",
+    "机器人",
+    "半导体",
+    "生物医药",
+    "新能源",
+    "汽车出行",
+    "企业服务",
+    "消费品",
+    "先进制造",
+    "文娱传媒",
+    "其他",
+]
+
+CAT_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "机器人",
+        re.compile(
+            r"(机器人|具身|人形|机械臂|灵巧手|无人系统|无人机|无人车|"
+            r"自动驾驶|智驾|Robot|robot|智能装备|工业自动化)"
+        ),
+    ),
+    (
+        "半导体",
+        re.compile(
+            r"(半导体|芯片|集成电路|晶圆|EDA|封测|光刻|存储芯片|功率器件|"
+            r"射频|模拟芯片|MCU|SoC|ASIC|FPGA|化合物半导体|光芯片|光电芯片|"
+            r"微电子|矽|硅基|硅酷|氮化镓|碳化硅|光子芯)"
+        ),
+    ),
+    (
+        "AI",
+        re.compile(
+            r"(人工智能|大模型|智能体|机器学习|深度学习|计算机视觉|自然语言|"
+            r"AIGC|LLM|算法|智算|算力|智能语音|语音识别|知识图谱|"
+            r"(?<![a-zA-Z])AI(?![a-zA-Z])|智谱|月之暗面|Minimax|MiniMax|"
+            r"数智|智慧(?:软件|系统|科技)|智能(?:软件|决策|科技|技术|创新)|"
+            r"认知智能|生成式|多模态)"
+        ),
+    ),
+    (
+        "生物医药",
+        re.compile(
+            r"(生物|医药|医疗|制药|药业|抗体|基因|细胞治疗|疫苗|诊断|器械|"
+            r"临床|肿瘤|医美|康养|Health|Bio|Med|医院|诊疗|健康科技)"
+        ),
+    ),
+    (
+        "新能源",
+        re.compile(
+            r"(新能源|光伏|储能|电池|锂电|氢能|风电|太阳能|充电桩|固态电池|"
+            r"钠电|燃料电池|碳中和|电力电子|逆变器)"
+        ),
+    ),
+    (
+        "汽车出行",
+        re.compile(r"(汽车|车载|出行|物流|航运|航空|航天|卫星|电动车|智能驾驶舱|通航)"),
+    ),
+    (
+        "企业服务",
+        # 收窄：只认明确 ToB/SaaS 语义，不再用「软件/信息科技」这种大网
+        re.compile(
+            r"(企业服务|SaaS|云服务|云计算|数据中心|网络安全|信息安全|"
+            r"协同办公|人力资源|HR SaaS|财税|ERP|CRM|低代码|DevOps|"
+            r"开源基础设施|数字化转型|企业管理|办公软件)"
+        ),
+    ),
+    (
+        "消费品",
+        re.compile(
+            r"(消费|零售|电商|品牌|餐饮|食品|饮料|美妆|服饰|潮玩|家居|母婴|"
+            r"宠物|文旅|酒店|咖啡|茶饮|直播带货|生活方式)"
+        ),
+    ),
+    (
+        "先进制造",
+        re.compile(
+            r"(制造|工业|材料|新材料|精密|传感器|激光|机床|自动化|装备|"
+            r"增材|3D打印|仪器|检测|量测|光学|光电|智能硬件|传感|机电|"
+            r"增材制造|先进材料)"
+        ),
+    ),
+    (
+        "文娱传媒",
+        re.compile(r"(文娱|传媒|影视|游戏|动漫|音乐|直播|内容|社交|教育|培训|体育)"),
+    ),
+]
+
+# 行业字段兜底：不再把「科技推广/软件信息」整包扔进企业服务
+INDUSTRY_FALLBACK: list[tuple[str, re.Pattern[str]]] = [
+    ("消费品", re.compile(r"(零售|批发|餐饮|食品|住宿)")),
+    ("文娱传媒", re.compile(r"(文化|娱乐|广播|电视|电影|体育)")),
+    ("生物医药", re.compile(r"(医药|卫生)")),
+    (
+        "先进制造",
+        re.compile(
+            r"(专用设备|通用设备|仪器仪表|金属制品|电气机械|汽车制造|"
+            r"研究和试验发展|专业技术服务业)"
+        ),
+    ),
+    ("半导体", re.compile(r"(计算机、通信和其他电子设备)")),
+    # 明确 ToB 行业才进企业服务；泛科技行业留给「其他」
+    ("企业服务", re.compile(r"(商务服务业)")),
+]
 
 STRONG = re.compile(
     r"(投资基金|创业投资基金|股权投资基金|产业投资基金|创业投资合伙|"
@@ -22,7 +135,8 @@ STRONG = re.compile(
 )
 HOLDING = re.compile(
     r"(企业管理合伙|企业管理中心|管理咨询中心|管理咨询合伙|员工持股|持股平台|"
-    r"咨询合伙企业|商务信息咨询|企业管理有限合伙)"
+    r"咨询合伙企业|商务信息咨询|企业管理有限合伙|管理咨询服务合伙|"
+    r"管理咨询有限公司|投资管理中心|咨询管理合伙|企业管理咨询)"
 )
 EMAIL_JUNK = re.compile(r"同邮箱企业|@")
 IND_FUND = {"资本市场服务", "货币金融服务", "其他金融业", "保险业"}
@@ -184,6 +298,17 @@ def clean_date(raw: object) -> str | None:
     return s[:10]
 
 
+def classify_deal(formal: str, short: str, industry: str) -> str:
+    text = f"{formal} {short or ''}"
+    for cat, pat in CAT_RULES:
+        if pat.search(text):
+            return cat
+    for cat, pat in INDUSTRY_FALLBACK:
+        if pat.search(industry or ""):
+            return cat
+    return "其他"
+
+
 def load_org(path: Path) -> dict:
     key = path.name.split("_")[0]
     meta = ORG_META.get(
@@ -208,14 +333,18 @@ def load_org(path: Path) -> dict:
         pct = parse_pct(str(row[idx["投资比例"]] or ""))
         if is_fund(formal, industry):
             continue
+        # 仅保留近两年，且必须有可解析投资日期
+        if not date or date < DEAL_CUTOFF:
+            continue
+        cat = classify_deal(formal, short, industry)
         prev = by.get(formal)
         if prev:
-            if date and (not prev["d"] or date > prev["d"]):
+            if date > (prev["d"] or ""):
                 prev.update(
                     n=short or prev["n"],
                     d=date,
                     r=region or prev["r"],
-                    i=industry or prev["i"],
+                    c=cat or prev["c"],
                     p=pct or prev["p"],
                     s=status or prev["s"],
                 )
@@ -224,39 +353,50 @@ def load_org(path: Path) -> dict:
                 "n": short or None,
                 "d": date,
                 "r": region or None,
-                "i": industry or None,
+                "c": cat,
                 "p": pct,
                 "s": status or None,
             }
     wb.close()
 
     regions = sorted({v["r"] for v in by.values() if v["r"]})
-    industries = sorted({v["i"] for v in by.values() if v["i"]})
+    cats_present = sorted(
+        {v["c"] for v in by.values() if v["c"]},
+        key=lambda c: CATEGORIES.index(c) if c in CATEGORIES else 99,
+    )
     rmap = {x: i for i, x in enumerate(regions)}
-    imap = {x: i for i, x in enumerate(industries)}
+    cmap = {x: i for i, x in enumerate(cats_present)}
     deals = []
     for formal, v in sorted(
         by.items(), key=lambda kv: (kv[1]["d"] or "", kv[0]), reverse=True
     ):
-        # [formal, short, date, regionIdx, industryIdx, pct, status]
+        # [formal, short, date, regionIdx, categoryIdx, pct, status]
         deals.append(
             [
                 formal,
                 v["n"],
                 v["d"],
                 rmap.get(v["r"]),
-                imap.get(v["i"]),
+                cmap.get(v["c"]),
                 v["p"],
                 v["s"],
             ]
         )
+    team = list(TEAMS.get(key) or [])
+    cat_counts = {}
+    for v in by.values():
+        cat_counts[v["c"]] = cat_counts.get(v["c"], 0) + 1
     return {
         "id": key,
         "name": meta["name"],
         "blurb": meta["blurb"],
         "focus": list(meta.get("focus") or []),
+        "team": team,
+        "teamSource": TEAM_SOURCES.get(key) or "",
+        "cutoff": DEAL_CUTOFF,
         "R": regions,
-        "I": industries,
+        "C": cats_present,
+        "catCounts": cat_counts,
         "deals": deals,
     }
 
@@ -287,8 +427,10 @@ def main() -> int:
 
     orgs.sort(key=lambda o: (-len(o["deals"]), o["name"]))
     payload = {
-        "v": 1,
-        "source": "qixinbao-crawl-1019",
+        "v": 2,
+        "source": "融资变更",
+        "cutoff": DEAL_CUTOFF,
+        "categories": CATEGORIES,
         "orgCount": len(orgs),
         "dealCount": sum(len(o["deals"]) for o in orgs),
         "orgs": orgs,

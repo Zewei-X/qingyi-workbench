@@ -14,18 +14,30 @@ type RawDeal = [
   string | null,
 ]
 
+type TeamMember = { n: string; t: string }
+
 type RawOrg = {
   id: string
   name: string
   blurb: string
   focus?: string[]
+  team?: TeamMember[]
+  teamSource?: string
+  cutoff?: string
   R: string[]
-  I: string[]
+  /** 赛道大类字典（替代原始工商行业） */
+  C?: string[]
+  /** 兼容旧数据 */
+  I?: string[]
+  catCounts?: Record<string, number>
   deals: RawDeal[]
 }
 
 type InvestorData = {
   v: number
+  source?: string
+  cutoff?: string
+  categories?: string[]
   orgCount: number
   dealCount: number
   orgs: RawOrg[]
@@ -36,18 +48,19 @@ type DealRow = {
   short: string
   date: string
   region: string
-  industry: string
+  category: string
   pct: string
   status: string
 }
 
 function expandDeals(org: RawOrg): DealRow[] {
+  const dict = org.C || org.I || []
   return org.deals.map((d) => ({
     formal: d[0],
     short: d[1] || '',
     date: d[2] || '',
     region: d[3] == null ? '' : org.R[d[3]] || '',
-    industry: d[4] == null ? '' : org.I[d[4]] || '',
+    category: d[4] == null ? '' : dict[d[4]] || '',
     pct: d[5] || '',
     status: d[6] || '',
   }))
@@ -59,6 +72,7 @@ export default function Investors() {
   const [loadError, setLoadError] = useState('')
   const [q, setQ] = useState('')
   const [dealQ, setDealQ] = useState('')
+  const [catFilter, setCatFilter] = useState('全部')
   const [orgId, setOrgId] = useState('')
   const [editing, setEditing] = useState<Contact | null>(null)
 
@@ -106,18 +120,32 @@ export default function Investors() {
 
   const activeOrg = orgRows.find((o) => o.id === orgId) || orgRows[0]
 
+  const catChips = useMemo(() => {
+    if (!activeOrg) return ['全部']
+    const counts = activeOrg.catCounts || {}
+    const order = data?.categories || activeOrg.C || []
+    const keys = order.filter((c) => (counts[c] || 0) > 0)
+    // 兜底：若无 catCounts，从当前 deals 统计
+    if (!keys.length) {
+      const seen = new Set(expandDeals(activeOrg).map((d) => d.category).filter(Boolean))
+      return ['全部', ...order.filter((c) => seen.has(c)), ...[...seen].filter((c) => !order.includes(c))]
+    }
+    return ['全部', ...keys]
+  }, [activeOrg, data])
+
   const deals = useMemo(() => {
     if (!activeOrg) return []
-    const rows = expandDeals(activeOrg)
+    let rows = expandDeals(activeOrg)
+    if (catFilter !== '全部') rows = rows.filter((d) => d.category === catFilter)
     const query = dealQ.trim().toLowerCase()
     if (!query) return rows
     return rows.filter((d) =>
-      [d.formal, d.short, d.region, d.industry, d.date, d.status]
+      [d.formal, d.short, d.region, d.category, d.date, d.status]
         .join(' ')
         .toLowerCase()
         .includes(query),
     )
-  }, [activeOrg, dealQ])
+  }, [activeOrg, dealQ, catFilter])
 
   function blankContact(): Contact {
     return {
@@ -177,7 +205,7 @@ export default function Investors() {
     <div className="investors-page">
       <PageHead
         title="投资机构"
-        desc={`已收录 ${num(data.orgCount)} 家机构、${num(data.dealCount)} 家历史被投公司（已剔除基金/持股平台）。联系人可后补。`}
+        desc={`来源：${data.source || '融资变更'}。已收录 ${num(data.orgCount)} 家机构；被投仅保留近两年（自 ${data.cutoff || '最近两年'}），共 ${num(data.dealCount)} 家，并按 AI / 机器人 / 消费品等大类归类。`}
         actions={
           <button className="btn primary" onClick={() => setEditing(blankContact())}>
             添加联系人
@@ -203,6 +231,7 @@ export default function Investors() {
             onChange={(e) => {
               setOrgId(e.target.value)
               setDealQ('')
+              setCatFilter('全部')
             }}
           >
             {(data.orgs || []).map((o) => (
@@ -292,11 +321,12 @@ export default function Investors() {
               onClick={() => {
                 setOrgId(o.id)
                 setDealQ('')
+                setCatFilter('全部')
               }}
             >
               <div className="t">{o.name}</div>
               <div className="s">
-                被投 {num(o.deals.length)} · 联系人 {num(o.people.length)}
+                近两年 {num(o.deals.length)} · 联系人 {num(o.people.length)}
               </div>
             </button>
           ))}
@@ -306,7 +336,7 @@ export default function Investors() {
         <div className="panel investors-detail">
           <div className="panel-h">
             <h2>{activeOrg.name}</h2>
-            <span>被投 {num(activeOrg.deals.length)} 家</span>
+            <span>近两年被投 {num(activeOrg.deals.length)} 家</span>
           </div>
 
           <div className="fa-org-profile">
@@ -321,6 +351,39 @@ export default function Investors() {
               </div>
             ) : null}
             <p className="fa-org-summary">{activeOrg.blurb}</p>
+          </div>
+
+          <div className="investor-section">
+            <div className="panel-h investor-subhead">
+              <h3>团队</h3>
+              <span>{num(activeOrg.team?.length || 0)} 人</span>
+            </div>
+            {activeOrg.team?.length ? (
+              <>
+                <div className="investor-team-grid">
+                  {activeOrg.team.map((m) => (
+                    <div key={`${m.n}-${m.t}`} className="investor-team-card">
+                      <div className="investor-team-name">{m.n}</div>
+                      <div className="investor-team-title">{m.t}</div>
+                    </div>
+                  ))}
+                </div>
+                {activeOrg.teamSource ? (
+                  <p className="muted tiny investor-team-source">
+                    来源：
+                    {/^https?:\/\//.test(activeOrg.teamSource) ? (
+                      <a href={activeOrg.teamSource} target="_blank" rel="noreferrer">
+                        {activeOrg.teamSource}
+                      </a>
+                    ) : (
+                      activeOrg.teamSource
+                    )}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <Empty text="暂无公开团队信息，待补充。" />
+            )}
           </div>
 
           <div className="investor-section">
@@ -394,15 +457,34 @@ export default function Investors() {
 
           <div className="investor-section">
             <div className="panel-h investor-subhead">
-              <h3>历史被投公司</h3>
+              <h3>近两年被投公司</h3>
               <span>
                 {num(deals.length)} / {num(activeOrg.deals.length)}
               </span>
             </div>
+            {catChips.length > 1 ? (
+              <div className="chips investor-cat-chips">
+                {catChips.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={`chip ${catFilter === c ? 'on' : ''}`}
+                    onClick={() => setCatFilter(c)}
+                  >
+                    {c}
+                    {c !== '全部' && activeOrg.catCounts?.[c]
+                      ? ` ${activeOrg.catCounts[c]}`
+                      : c === '全部'
+                        ? ` ${activeOrg.deals.length}`
+                        : ''}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="toolbar investor-deal-toolbar">
               <input
                 className="field grow"
-                placeholder="搜索公司、地区、行业…"
+                placeholder="搜索公司、地区、赛道大类…"
                 value={dealQ}
                 onChange={(e) => setDealQ(e.target.value)}
               />
@@ -423,7 +505,7 @@ export default function Investors() {
                     <th>公司</th>
                     <th>投资日期</th>
                     <th>地区</th>
-                    <th>行业</th>
+                    <th>赛道大类</th>
                     <th>持股</th>
                     <th>状态</th>
                   </tr>
@@ -437,7 +519,9 @@ export default function Investors() {
                       </td>
                       <td>{d.date || '—'}</td>
                       <td>{d.region || '—'}</td>
-                      <td className="clamp">{d.industry || '—'}</td>
+                      <td>
+                        <span className="investor-cat-tag">{d.category || '其他'}</span>
+                      </td>
                       <td>{d.pct ? `${d.pct}%` : '—'}</td>
                       <td>{d.status || '—'}</td>
                     </tr>
@@ -450,7 +534,10 @@ export default function Investors() {
             <div className="investors-deal-cards">
               {deals.map((d) => (
                 <article key={d.formal} className="investor-deal-card">
-                  <div className="investor-deal-card-title">{d.short || d.formal}</div>
+                  <div className="investor-deal-card-top">
+                    <div className="investor-deal-card-title">{d.short || d.formal}</div>
+                    <span className="investor-cat-tag">{d.category || '其他'}</span>
+                  </div>
                   {d.short ? <div className="muted tiny">{d.formal}</div> : null}
                   <div className="investor-deal-card-meta">
                     <span>{d.date || '日期未知'}</span>
@@ -458,7 +545,6 @@ export default function Investors() {
                     <span>{d.pct ? `${d.pct}%` : '持股未知'}</span>
                     <span>{d.status || '状态未知'}</span>
                   </div>
-                  <div className="investor-deal-card-industry">{d.industry || '行业未知'}</div>
                 </article>
               ))}
               {!deals.length ? <Empty text="没有匹配的被投公司。" /> : null}

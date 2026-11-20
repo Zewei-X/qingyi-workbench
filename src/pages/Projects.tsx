@@ -23,7 +23,14 @@ export default function Projects() {
       if (verdict !== '全部' && c.verdict !== verdict) return false
       if (onlyCC && !c.cc) return false
       if (!query) return true
-      const bag = [c.name, c.sector, c.founder, c.judgment, ...(c.events[0]?.investors || [])]
+      const bag = [
+        c.name,
+        c.sector,
+        c.founder,
+        c.judgment,
+        c.source,
+        ...(c.events[0]?.investors || []),
+      ]
         .join(' ')
         .toLowerCase()
       return bag.includes(query)
@@ -92,17 +99,19 @@ export default function Projects() {
         <div className="table-wrap">
           <table className="data">
             <colgroup>
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '18%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '14%' }} />
               <col style={{ width: '12%' }} />
+              <col style={{ width: '10%' }} />
               <col />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '8%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '7%' }} />
             </colgroup>
             <thead>
               <tr>
                 <th>公司</th>
                 <th>赛道</th>
+                <th>来源</th>
                 <th>最近融资</th>
                 <th>机构</th>
                 <th>判断</th>
@@ -122,6 +131,7 @@ export default function Projects() {
                     <div>{c.sector || '—'}</div>
                     <div className="muted">{c.group}</div>
                   </td>
+                  <td className="muted">{c.source || c.events[0]?.source || c.cc?.source || '—'}</td>
                   <td>{shortDate(c.lastDate)}</td>
                   <td className="clamp">{c.events[0]?.investors.join('、') || '—'}</td>
                   <td>

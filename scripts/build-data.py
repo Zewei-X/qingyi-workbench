@@ -43,6 +43,25 @@ GROUPS = [
 ]
 UNGROUPED = "未归类"
 
+# 项目库来源展示名：原始 Excel「来源」→ 工作台标注
+SOURCE_MAP = {
+    "机构融资": "融资变更",
+    "机构投资列表": "融资变更",
+    "国内融资": "PR爬取",
+    "国内融资事件": "PR爬取",
+    "企名片补录": "企名片",
+    "企名片": "企名片",
+    # 外滩大会、CC表手动项目等保留原名
+}
+
+
+def map_source(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    return SOURCE_MAP.get(text, text)
+
+
 STAGE_RULES = [
     ("talked", r"聊过|已聊|交流过"),
     ("connected", r"已加|通过|已添加|已有微信|已建联|加到微信"),
@@ -188,7 +207,7 @@ def main():
         company(row["项目"])["events"].append({
             "date": row["投资日期"][:10] or None,
             "investors": [x.strip() for x in re.split(r"[、,，;；]", row["机构"]) if x.strip() and x.strip() != "未披露"],
-            "source": row["来源"],
+            "source": map_source(row["来源"]),
             "sector": row["赛道"],
             "related": row["赛道关联"],
             "founder": founder,
@@ -210,7 +229,7 @@ def main():
             "stage": stage, "status": row["CC状态"], "lastTouch": last_touch, "channels": channels,
             "reason": row["cc原因"], "reasonKind": reason_kind(row["cc原因"]), "owner": owner_of(row["cc原因"]),
             "contact": row["联系方式"], "people": people, "phones": phones, "emails": emails, "direct": direct,
-            "source": row["来源"], "sector": row["赛道"],
+            "source": map_source(row["来源"]), "sector": row["赛道"],
         }
         if item["cc"]:  # 同名公司出现两行：保留信息更全的字段
             previous = item["cc"]
@@ -232,9 +251,24 @@ def main():
         group = group_of(*sectors)
         if group == UNGROUPED and cc and cc["reasonKind"] == "消费榜单":
             group = "消费与品牌"
+        # 公司级来源：按最近融资事件优先，再补 CC；多来源去重后用顿号拼接
+        source_parts = []
+        for e in events:
+            s = e.get("source") or ""
+            if s and s not in source_parts:
+                source_parts.append(s)
+        if cc and cc.get("source") and cc["source"] not in source_parts:
+            source_parts.append(cc["source"])
+        # 仅出现在 CC、Excel 未填来源：仍给公司级标注，避免项目库空白
+        if not source_parts and cc:
+            source_parts.append("CC表")
+            if not cc.get("source"):
+                cc["source"] = "CC表"
+        company_source = "、".join(source_parts)
         result.append({
             "id": item["id"], "name": item["name"], "sector": sector, "sectorIsClass": is_industry_class(sector),
             "group": group,
+            "source": company_source,
             "founder": next((e["founder"] for e in events if e["founder"]), ""),
             "relation": next((e["status"] for e in events if e["status"]), ""),
             "verdict": judged["verdict"] if judged else "none",
@@ -256,6 +290,7 @@ def main():
     print(f"公司 {len(result)} 家，融资事件 {sum(len(c['events']) for c in result)} 条，CC {len(in_cc)} 家")
     print("判断:", dict(Counter(c["verdict"] for c in result)))
     print("CC 阶段:", dict(Counter(c["cc"]["stage"] for c in in_cc)))
+    print("公司来源:", dict(Counter(c["source"] or "(空)" for c in result).most_common(12)))
     print("研究赛道:", dict(Counter(c["group"] for c in result).most_common()))
     print("负责人:", owners)
     print("识别到联系人:", sum(bool(c["cc"]["people"]) for c in in_cc),

@@ -43,6 +43,10 @@ export interface Company {
   sector: string
   sectorIsClass: boolean
   group: string
+  /** 项目来源标注：融资变更 / PR爬取 / 企名片 / 外滩大会 等 */
+  source?: string
+  /** 用户在详情页手改过来源时写入，便于持久化覆盖种子数据 */
+  sourceManual?: boolean
   founder: string
   relation: string
   verdict: Verdict
@@ -115,9 +119,25 @@ export interface Expo {
   about: string
   /** 项目库里「来源」等于该值的公司会被列为展会线索 */
   leadSource?: string
+  /** 手工新增的展会 */
+  custom?: boolean
 }
 
 export type ExpoStatus = 'watch' | 'planned' | 'attended'
+
+/** 展会关联的公司：可挂项目库，也可只记现场名字 */
+export interface ExpoFirm {
+  id: string
+  name: string
+  companyId: string | null
+}
+
+/** 某一届参展的 Profile：收获与带回的公司 */
+export interface ExpoProfile {
+  year: number
+  harvest: string
+  firms: ExpoFirm[]
+}
 
 export interface ExpoState {
   status: ExpoStatus
@@ -127,7 +147,12 @@ export interface ExpoState {
   /** 负责人：哪位同事主跟这场 */
   owner: string
   memo: string
+  /** 手工加入的展会公司（项目库 id） */
   leads: string[]
+  /** 从 leadSource 自动线索里隐藏的公司 id */
+  dismissedLeads: string[]
+  /** 按年份存的参展 Profile */
+  profiles: ExpoProfile[]
 }
 
 export interface DocSection {

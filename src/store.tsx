@@ -9,8 +9,10 @@ import {
   type ReactNode,
 } from 'react'
 import type {
+  City,
   Company,
   Contact,
+  Expo,
   ExpoState,
   Note,
   SectorTrack,
@@ -19,7 +21,7 @@ import type {
   TouchLog,
   Verdict,
 } from './types'
-import { CONTACTS_SEED_VERSION, EXPOS, FA_CONTACTS, SAMPLE_NOTES } from './seed'
+import { CONTACTS_SEED_VERSION, EXPOS as SEED_EXPOS, FA_CONTACTS, SAMPLE_NOTES } from './seed'
 import { SEED_TRACKS, TRACKS_SEED_VERSION } from './researchSeed'
 import { addDays, FOLLOW_UP_DAYS, todayISO, uid } from './lib'
 import { fetchJsonCached, fetchJsonOptional } from './bootData'
@@ -59,6 +61,7 @@ interface Store {
   notes: Note[]
   contacts: Contact[]
   expoState: Record<string, ExpoState>
+  expos: Expo[]
   tracks: SectorTrack[]
   /** CC 侧栏自定义赛道（可空表） */
   ccTracks: string[]
@@ -73,6 +76,17 @@ interface Store {
   saveContact: (contact: Contact) => void
   deleteContact: (id: string) => void
   saveExpo: (id: string, patch: Partial<ExpoState>) => void
+  addExpo: (input: {
+    name: string
+    city: City
+    month: number
+    venue?: string
+    dateStart?: string
+    dateEnd?: string
+    about?: string
+    groups?: string[]
+  }) => string
+  deleteExpo: (id: string) => void
   saveTrack: (track: SectorTrack) => void
   deleteTrack: (id: string) => void
   /** 从 CC 列表移除（本机记住，刷新不回） */
@@ -121,6 +135,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [notes, setNotes] = useState<Note[]>(SAMPLE_NOTES)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [expoState, setExpoState] = useState<Record<string, ExpoState>>({})
+  const [customExpos, setCustomExpos] = useState<Expo[]>([])
+  const [removedExpoIds, setRemovedExpoIds] = useState<string[]>([])
   const [tracks, setTracks] = useState<SectorTrack[]>(SEED_TRACKS)
   const [dismissedCcIds, setDismissedCcIds] = useState<string[]>([])
   const [ccTracks, setCcTracks] = useState<string[]>([])
@@ -257,6 +273,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               sector: patch.sector || '',
               sectorIsClass: false,
               group: patch.group || '未归类',
+              source: patch.source || '',
+              sourceManual: patch.sourceManual,
               founder: patch.founder || '',
               relation: patch.relation || '',
               verdict: patch.verdict || 'none',
@@ -288,6 +306,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setContacts([...faList, ...foundersKept])
         }
         setExpoState(persist.expoState || {})
+        setCustomExpos(persist.customExpos || [])
+        setRemovedExpoIds(persist.removedExpoIds || [])
         {
           const useSeed =
             persist.tracksSeedVersion !== TRACKS_SEED_VERSION || persist.tracks === undefined
@@ -334,6 +354,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       notes,
       contacts,
       expoState,
+      customExpos,
+      removedExpoIds,
       tracks,
       tracksSeedVersion: TRACKS_SEED_VERSION,
       contactsSeedVersion: CONTACTS_SEED_VERSION,
@@ -364,6 +386,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     notes,
     contacts,
     expoState,
+    customExpos,
+    removedExpoIds,
     tracks,
     dismissedCcIds,
     ccTracks,
@@ -514,8 +538,63 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         owner: raw?.owner || raw?.attendees || '',
         memo: raw?.memo || '',
         leads: raw?.leads || [],
+        dismissedLeads: raw?.dismissedLeads || [],
+        profiles: raw?.profiles || [],
       }
       return { ...prev, [id]: { ...current, ...patch } }
+    })
+  }, [])
+
+  const expos = useMemo(() => {
+    const removed = new Set(removedExpoIds)
+    const seed = SEED_EXPOS.filter((e) => !removed.has(e.id))
+    const custom = customExpos.filter((e) => !removed.has(e.id))
+    const seen = new Set(seed.map((e) => e.id))
+    return [...seed, ...custom.filter((e) => !seen.has(e.id))]
+  }, [customExpos, removedExpoIds])
+
+  const addExpo = useCallback(
+    (input: {
+      name: string
+      city: City
+      month: number
+      venue?: string
+      dateStart?: string
+      dateEnd?: string
+      about?: string
+      groups?: string[]
+    }) => {
+      const name = input.name.trim()
+      const id = `expo-${uid()}`
+      const month = Math.min(12, Math.max(1, Math.round(input.month) || 1))
+      const expo: Expo = {
+        id,
+        name,
+        city: input.city,
+        month,
+        dateStart: input.dateStart || undefined,
+        dateEnd: input.dateEnd || input.dateStart || undefined,
+        venue: (input.venue || '').trim(),
+        groups: input.groups?.filter(Boolean) || [],
+        platforms: [],
+        about: (input.about || '').trim(),
+        custom: true,
+      }
+      setCustomExpos((prev) => [expo, ...prev])
+      setRemovedExpoIds((prev) => prev.filter((x) => x !== id))
+      return id
+    },
+    [],
+  )
+
+  const deleteExpo = useCallback((id: string) => {
+    setCustomExpos((prev) => prev.filter((e) => e.id !== id))
+    setRemovedExpoIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    setExpoState((prev) => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
     })
   }, [])
 
@@ -665,6 +744,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     notes,
     contacts,
     expoState,
+    expos,
     tracks,
     ccTracks,
     todos,
@@ -678,6 +758,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     saveContact,
     deleteContact,
     saveExpo,
+    addExpo,
+    deleteExpo,
     saveTrack,
     deleteTrack,
     removeFromCC,
@@ -698,4 +780,4 @@ export function useStore() {
   return ctx
 }
 
-export { EXPOS }
+export { SEED_EXPOS as EXPOS }

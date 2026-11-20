@@ -1,6 +1,7 @@
 import type {
   Company,
   Contact,
+  Expo,
   ExpoState,
   Note,
   SectorTrack,
@@ -16,6 +17,10 @@ export type Persist = {
   notes?: Note[]
   contacts?: Contact[]
   expoState?: Record<string, ExpoState>
+  /** 手工添加的展会 */
+  customExpos?: Expo[]
+  /** 从种子列表里删掉的展会 id */
+  removedExpoIds?: string[]
   tracks?: SectorTrack[]
   tracksSeedVersion?: number
   contactsSeedVersion?: number
@@ -57,7 +62,9 @@ export function persistNonEmpty(p: Persist) {
       (p.ccTracks && p.ccTracks.length) ||
       (p.todos && p.todos.length) ||
       (p.tracks && p.tracks.length) ||
-      (p.expoState && Object.keys(p.expoState).length),
+      (p.expoState && Object.keys(p.expoState).length) ||
+      (p.customExpos && p.customExpos.length) ||
+      (p.removedExpoIds && p.removedExpoIds.length),
   )
 }
 
@@ -87,12 +94,15 @@ export function slimCompanyOverlay(
     const hasCc = Boolean(c.cc)
     const hasVerdict = c.verdict && c.verdict !== 'none'
     const hasMeta = Boolean(c.judgment || c.relation)
-    if (!c.custom && !hasCc && !hasVerdict && !hasMeta) continue
+    const hasSourceManual = Boolean(c.sourceManual)
+    if (!c.custom && !hasCc && !hasVerdict && !hasMeta && !hasSourceManual) continue
     overlay[c.id] = c.custom
       ? {
           name: c.name,
           sector: c.sector,
           group: c.group,
+          source: c.source,
+          sourceManual: c.sourceManual,
           founder: c.founder,
           relation: c.relation,
           verdict: c.verdict,
@@ -110,6 +120,7 @@ export function slimCompanyOverlay(
           verdict: c.verdict,
           judgment: c.judgment,
           relation: c.relation,
+          ...(hasSourceManual ? { source: c.source || '', sourceManual: true } : {}),
           cc: c.cc,
           feishuUrl: c.feishuUrl,
           sectorDetailUrl: c.sectorDetailUrl,
